@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # RECOVERY_AREA must be set
-#[ -z "$RECOVERY_AREA" ] && exit 1
+[ -z "$RECOVERY_AREA" ] && exit 1
 Pool="$1"
 
 pgrep -x recover >/dev/null && echo "$(date '+%m/%d %H:%M:%S'): anoher recovery session is runnig, waiting..."
@@ -8,8 +8,8 @@ while pgrep -x recover >/dev/null ; do
     sleep 10
 done 
 
-read -r Host File Uid
-echo "$(date '+%m/%d %H:%M:%S'): starting recovery $Host $File $Uid"
+read -r Host File Uid Time
+echo "$(date '+%m/%d %H:%M:%S'): starting recovery $Host $File $Uid $Time"
 
 [ -z "$Host" ] || [ -z "$File" ] && exit 2
 
@@ -19,8 +19,10 @@ Destination=$RECOVERY_AREA/$Host
 
 RecoverOptions=( -iY -a "-c $Host" "-d $Destination" )
 [ -n "$Pool" ] && RecoverOptions+=("-b $Pool")
+[ -n "$Time" ] && RecoverOptions+=("-t '$(date -d $Time +%m/%d/%Y\ %H:%M:%S)'")
 [ -r $Destination/exclude.lst ] && RecoverOptions+=("-e $Destination/exclude.lst")
-recover ${RecoverOptions[@]} $File
+
+eval recover ${RecoverOptions[@]} $File
 
 RC=$?
 # treat non-zero rc as warning, because it may be harmless
@@ -34,7 +36,7 @@ if [ -L "$Destination/$Basename" ]; then
   Target=$(readlink "$Destination/$Basename")
   # Resolve relative path names
   [ ${Target:0:1} == '/' ] || Target=$Dirname/$Target
-  recover ${RecoverOptions[@]} $Target
+  eval recover ${RecoverOptions[@]} $Target
   [ -n "$Uid" ] && [ -e "$Destination/$Target" ] && chown -R  $Uid $Destination/$Target
 fi
 

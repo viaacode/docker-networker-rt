@@ -10,7 +10,6 @@ COPY recover.sh /
 COPY bootstrap.sh /
 
 ENV RECOVERY_AREA /recovery_area
-ENV RECOVERY_SOCKET_PATH "$RECOVERY_AREA/networker.socket"
-ENV RECOVERY_SOCKET "unix-listen:$RECOVERY_SOCKET_PATH,reuseaddr,fork,mode=0600,unlink-early=1"
+ENV RECOVERY_SOCKET "unix-listen:$RECOVERY_AREA/networker.socket,reuseaddr,fork,mode=0600,unlink-early=1"
 
 ENTRYPOINT [ "/bootstrap.sh" ]

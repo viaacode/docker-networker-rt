@@ -98,6 +98,7 @@ Pool=$(mmpool $Volume | grep ^$Volume | cut -f2 -d ' ')
 # does not behave consistently between linux distributions
 wait_for_networker_startup
 echo "$HOSTNAME is open for recovery"
-echo "Usage: echo <client> <path> <uid> | socat -,ignoreeof unix:$RECOVERY_SOCKET_PATH"
+echo "Listening on $(expr match "$RECOVERY_SOCKET" '\([^,]\+\)')"
+echo "Usage: echo <client> <path> <uid> | socat -,ignoreeof <socket>"
 
 socat "$RECOVERY_SOCKET"  EXEC:"/recover.sh $Pool"

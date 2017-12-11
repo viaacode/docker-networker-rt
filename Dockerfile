@@ -2,7 +2,7 @@ FROM centos:7
 
 COPY lgtoclnt-8.2.4.7-1.x86_64.rpm lgtoserv-8.2.4.7-1.x86_64.rpm lgtonode-8.2.4.7-1.x86_64.rpm /
 
-RUN yum install -y socat file # file required by lgto but not listed as dep
+RUN yum install -y socat jq file # file required by lgto but not listed as dep
 RUN yum localinstall --nogpgcheck -y /lgtoclnt-8.2.4.7-1.x86_64.rpm \
         /lgtoserv-8.2.4.7-1.x86_64.rpm /lgtonode-8.2.4.7-1.x86_64.rpm
 

@@ -8,10 +8,17 @@ while pgrep -x recover >/dev/null ; do
     sleep 10
 done 
 
-read -r Host File Uid Time
+read -r JsonObject
+Host=$(echo $JsonObject | jq -e .client)  || exit 2
+File=$(echo $JsonObject | jq -e .path) || exit 3
+Uid=$(echo $JsonObject | jq -e .uid) 
+Time=$(echo $JsonObject | jq -e .time)
+
 echo "$(date '+%m/%d %H:%M:%S'): starting recovery $Host $File $Uid $Time"
 
 [ -z "$Host" ] || [ -z "$File" ] && exit 2
+
+echo $Host $File $Uid $Time
 
 Basename=$(basename $File)
 Dirname=$(dirname $File)
@@ -19,11 +26,15 @@ Destination=$RECOVERY_AREA/$Host
 
 RecoverOptions=( -iY -a "-c $Host" "-d $Destination" )
 [ -n "$Pool" ] && RecoverOptions+=("-b $Pool")
-[ -n "$Time" ] && RecoverOptions+=("-t '$(date -d $Time +%m/%d/%Y\ %H:%M:%S)'")
+
+if [ "$Time" != "null" ]; then
+    RecoverOptions+=("-t '$(date -d $Time +%m/%d/%Y\ %H:%M:%S)'") 
+    [ $? -eq 0 ] || exit 4
+fi
+
 [ -r $Destination/exclude.lst ] && RecoverOptions+=("-e $Destination/exclude.lst")
 
-eval recover ${RecoverOptions[@]} $File
-
+echo eval recover ${RecoverOptions[@]} $File
 RC=$?
 # treat non-zero rc as warning, because it may be harmless
 # for example, files that grew during backup
@@ -37,6 +48,6 @@ if [ -L "$Destination/$Basename" ]; then
   # Resolve relative path names
   [ ${Target:0:1} == '/' ] || Target=$Dirname/$Target
   eval recover ${RecoverOptions[@]} $Target
-  [ -n "$Uid" ] && [ -e "$Destination/$Target" ] && chown -R  $Uid $Destination/$Target
+  [ "$Uid" != "null" ] && [ -e "$Destination/$Target" ] && chown -R  $Uid $Destination/$Target
 fi
 

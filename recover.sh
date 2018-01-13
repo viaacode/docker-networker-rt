@@ -25,6 +25,10 @@ Basename=$(basename $File)
 Dirname=$(dirname $File)
 Destination=$RECOVERY_AREA/$Host
 
+[ -d $Destination ] || mkdir $Destination
+chgrp $RecoverySocketGid $Destination
+chmod 770 $Destination
+
 RecoverOptions=( -iY -a "-c $Host" "-d $Destination" )
 [ -n "$Pool" ] && RecoverOptions+=("-b $Pool")
 

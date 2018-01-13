@@ -12,6 +12,7 @@ RUN yum localinstall --nogpgcheck -y /lgtoclnt-8.2.4.7-1.x86_64.rpm \
 COPY recover.sh /
 COPY bootstrap.sh /
 
+ENV RecoverySocketGid 4
 ENV RECOVERY_AREA /recovery_area
 ENV RECOVERY_SOCKET "unix-listen:$RECOVERY_AREA/networker.socket,reuseaddr,fork,mode=0600,unlink-early=1"
 

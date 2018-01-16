@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# RECOVERY_AREA must be set
-[ -z "$RECOVERY_AREA" ] && exit 1
+# RecoveryArea must be set
+set -x
+[ -z "$RecoveryArea" ] && exit 1
 Pool="$1"
 
 pgrep -x recover >/dev/null && echo "$(date '+%m/%d %H:%M:%S'): anoher recovery session is runnig, waiting..."
@@ -23,10 +24,10 @@ echo $Host $File $Uid $Time
 
 Basename=$(basename $File)
 Dirname=$(dirname $File)
-Destination=$RECOVERY_AREA/$Host
+Destination=$RecoveryArea/$Host
 
 [ -d $Destination ] || mkdir $Destination
-chgrp $RecoverySocketGid $Destination
+chgrp $RecoveryAreaGid $Destination
 chmod 770 $Destination
 
 RecoverOptions=( -iY -a "-c $Host" "-d $Destination" )
@@ -40,6 +41,7 @@ fi
 if [ "$Exclude" != 'null' ]; then
   ExcludeFile="/tmp/$$.$RANDOM"
   echo $Exclude | jq -er '.[]' >$ExcludeFile
+  trap "{ echo $ExcludeFile; rm -f $ExcludeFile; }" EXIT
   RecoverOptions+=("-e $ExcludeFile")
 fi
 
@@ -60,4 +62,4 @@ if [ -L "$Destination/$Basename" ]; then
   [ "$Uid" != "null" ] && [ -e "$Destination/$Target" ] && chown -R  $Uid $Destination/$Target
 fi
 
-[ -n "$ExcludeFile" ] && rm $ExcludeFile
+exit 0

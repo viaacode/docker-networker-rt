@@ -1,49 +1,48 @@
-# docker-nsrserver
+# docker-networker-rt
 
 EMC networker server instance for automated Disaster Recovery Testing.
+Run recovery tests with minimal need for resources and tooling.
 
 - Bootstraps an EMC networker server, typically from a remote clone device.
-- Facilitates automated recovery tests by providing an generic interface for recovery requests:
-  - no need for passwords or client certificates
-  - a simple unix socket interface which abstracts away the backup software and recovery command syntax.
-
-The deployment has to take into account the security implications. It is degined to run on a secured host.
+- Facilitates automated recovery tests by providing a generic interface for recovery requests:
+  - no client passwords or client certificates
+  - a simple unix socket interface which abstracts away the recovery command syntax.
 
 The container is built from a standard Centos base image, hence building and
-running the container simulates a Bare Metal Restore scenario. 
-
-It allows to run automated recovery tests with minimal need for resources and tooling.
+running the container simulates a Bare Metal Restore scenario.
 
 Given
 - a backup device containing regular backups and one or more bootstrap backups, accessible from within a docker container.
-- device configuration file (used by nsradmin to import the device configuration)
-- a bootstrap ID and the corresponding volume name (standard networker bootstrap information)
+- the corresponding device configuration file (used by nsradmin to import the device configuration)
+- a bootstrap ID and volume name (standard networker bootstrap information)
 
 running this container will:
 - configure the device in networker
 - recover a subset of the server resources needed for the recovery tests
-- recover the client resources
+- recover the client resources from the bootstrap
 - restore the client indexes
-- starts listening on a protected unix domain socket for recovery requests
+- starts listening on a socket for recovery requests
 
-After an initial run, the container can be stopped and started as needed, without changing the internal state.
+After an initial run, the container can be stopped and started as needed, while
+keeping the media database.
 
 ## Usage
 
-### Start the networker server
+### Start the networker server container
 
 The device configuration file is mounted under /bootstrapdevice.
 The volume where the results of the recovery requests will be stored is mounted under /recovery_area.
 In the default setup, this volume will also contain the listening socket.
 The hostname of the container must be the same as the hostname of the original networker server.
-```bash 
-docker run -d --name backupserver.example.net -h backupserver.example.com -v /root/clone_device:/bootstrapdevice -v /workspace:/recovery_area nsrserver 3044979299,DCG_001_DCO
+```bash
+docker run -d --name backupserver.example.net -h backupserver.example.com -v /root/clone_device:/bootstrapdevice -v /workspace:/recovery_area networker 3044979299,DCG_001_DCO
 ```
 
 ### Recover a file on the host where the container is running
 
 ```bash
-$ echo client.example.net /var/lib/postgresql/data/backup_label | socat -,ignoreeof /workspace/networker.socket
+$ echo '{ "client": "client.example.net", "path": "/var/lib/postgresql/data/backup_label" }' \
+  | socat -,ignoreeof /workspace/networker.socket
 07/31 16:37:47: starting recovery client.example.net /var/lib/postgresql/data/backup_label
 Recovering 1 file from /var/lib/postgresql/data/backup_label into /recovery_area/client.example.net
 Requesting 1 file(s), this may take a while...
@@ -65,3 +64,5 @@ Mounting /workspace/client.example.net and the socket in a container allows to r
 docker run --name "client recovery test" -h client.example.net -v /workspace/client.example.net:/recovery_area -v /workspace/networker.socket:/recovery_socket postgresql:drtest
 
 ```
+
+There are security implications. It is degined to run on a secured host.

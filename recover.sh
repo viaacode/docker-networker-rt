@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 # RecoveryArea must be set
 set -x
+
 [ -z "$RecoveryArea" ] && exit 1
 Pool="$1"
-
-pgrep -x recover >/dev/null && echo "$(date '+%m/%d %H:%M:%S'): anoher recovery session is runnig, waiting..."
-while pgrep -x recover >/dev/null ; do
-    sleep 10
-done
 
 read -r JsonObject
 Host=$(echo $JsonObject | jq -er .client)  || exit 2
@@ -22,13 +18,11 @@ echo "$(date '+%m/%d %H:%M:%S'): starting recovery $Host $File $Uid $Time"
 
 echo $Host $File $Uid $Time
 
-Basename=$(basename $File)
-Dirname=$(dirname $File)
 Destination=$RecoveryArea/$Host
 
 [ -d $Destination ] || mkdir $Destination
-chgrp $RecoveryAreaGid $Destination
-chmod 770 $Destination
+[ $(stat -c %g $Destination) -eq 4 ] || chgrp $RecoveryAreaGid $Destination
+[ $(stat -c %a $Destination) -eq 0770 ] || chmod 0770 $Destination
 
 RecoverOptions=( -iY -a "-c $Host" "-d $Destination" )
 [ -n "$Pool" ] && RecoverOptions+=("-b $Pool")
@@ -45,21 +39,28 @@ if [ "$Exclude" != 'null' ]; then
   RecoverOptions+=("-e $ExcludeFile")
 fi
 
-eval recover ${RecoverOptions[@]} $File
-RC=$?
-# treat non-zero rc as warning, because it may be harmless
-# for example, files that grew during backup
-[ $RC -ne 0 ] && echo "Warning: recover ended with non-zero rc: $RC"
+# Recursive recover for symbolic links
+function nrwrecover {
+ Basename=$(basename $File)
+ eval recover ${RecoverOptions[@]} $File
+ RC=$?
+ # treat non-zero rc as warning, because it may be harmless
+ # for example, files that grew during backup
+ [ $RC -ne 0 ] && echo "Warning: recover ended with non-zero rc: $RC"
 
-[ "$Uid" != "null" ] && [ -e "$Destination/$Basename" ] && chown -R  $Uid $Destination/$Basename
+ [ -e "$Destination/$Basename" ] || exit 5    # recovery failed
+ [ "$Uid" == "null" ] || chown -R  $Uid $Destination/$Basename
 
-# If recoverd file is a symlink, also recover the file it points to
-if [ -L "$Destination/$Basename" ]; then
-  Target=$(readlink "$Destination/$Basename")
-  # Resolve relative path names
-  [ ${Target:0:1} == '/' ] || Target=$Dirname/$Target
-  eval recover ${RecoverOptions[@]} $Target
-  [ "$Uid" != "null" ] && [ -e "$Destination/$Target" ] && chown -R  $Uid $Destination/$Target
-fi
+ # If recoverd file is a symlink, also recover the file it points to
+ if [ -L "$Destination/$Basename" ]; then
+   Dirname=$(dirname $File)
+   $File=$(readlink "$Destination/$Basename")
+   # Resolve relative path names
+   [ ${File:0:1} == '/' ] || File=$Dirname/$File
+   nrwrecover
+ fi
+}
+
+nrwrecover
 
 exit 0

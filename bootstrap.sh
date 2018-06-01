@@ -24,45 +24,38 @@ function bootstrap {
 
 BootStrapId=${1%,*}
 Volume=${1#*,}
+Device=$(sed -r -n -e  's/^\s+name:\s*([^;]+);/\1/p' /bootstrapdevice )
 
-# Create a networker resource for the DD device that contains the
+# Create a networker resource for the device containing the
 # backup filesets and bootstraps
 nsradmin -i /bootstrapdevice
 wait_for_networker_startup
 
-# recover the networker bootstrap with bootsrap id $1
-# Supply the bootstrap ID with the necessary line feeds at stdin
-mmrecov <<EOF
-$BootStrapId
 
+nsrdr -a -B $BootStrapId  -d $Device -v
 
+# Unmount all volumes
+/usr/sbin/nsrmm -u -y
 
+# Disable all workflows
+nsrpolicy policy list |\
+    while read -r pol; do
+        nsrpolicy workflow list -p "$pol" |\
+            while read -r wfl; do
+                nsrpolicy workflow update -p "$pol" -w "$wfl" -u No -E No
+            done
+        done
+
+# Disable devices and delete vproxies
+nsradmin -i /mask_devices.nsradmin
+
+# Re-enable and mount our Disaster Recovery Device
+nsradmin <<EOF
+. name:$Device
+update enabled:Yes
+y
 EOF
-
-# Stop networker and copy a subset of resources needed for the DR test.
-# This includes the NSR Client resources and the label and pool resources. 
-# Don't copy device resource files, as our device must remain read-only.
-
-/etc/init.d/networker stop
-
-cd /nsr/res.R || exit 1
-
-# Copy Media Pool Resources
-# All Pool resources are copied, but note that recovery is restricted to the 
-# pool containing our bootstrap device. (see below)
-find . -type f -exec grep -q 'type: NSR pool' {} \;  -print | cpio -pvdm /nsr/res 
- 
-# Copy Label Templates
-find . -type f -exec grep -q 'type: NSR label' {} \; -print | cpio -pvdm /nsr/res 
-
-# Copy client resources except VBA
-find . -type f -exec grep -q 'type: NSR client' {} \; \
-    -not -exec grep -q 'VBA Server Host;' {} \; -print | cpio -pvdm /nsr/res
-
-# Restart the networker server
-
-/etc/init.d/networker start
-wait_for_networker_startup
+/usr/sbin/nsrmm -m $Volume -f $Device -r
 
 # Recover the client indexes
 mminfo -q volume=$Volume -r client | sort -u | xargs  nsrck -L7 
@@ -77,14 +70,16 @@ mminfo -q volume=$Volume -r client | sort -u | xargs  nsrck -L7
 # This script requires bootstrap info
 # as a string with format: "ssid,file,record,volume"
 [ -z "$1" ] && exit 1
+set -x
+
 BootStrapInfo=$1
+Volume=${BootStrapInfo#*,}
 
 echo "Bootstrap Info: $BootStrapInfo"
 
 /etc/init.d/networker start
 sleep 30
 
-Volume=${BootStrapInfo#*,}
 # only perform bootstrap recovery if our volume is not mounted
 # this allows to restart a stopped container without losing state
 nsrmm | grep mounted | grep -q $Volume || bootstrap $BootStrapInfo

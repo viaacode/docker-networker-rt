@@ -1,0 +1,7 @@
+. type:NSR VMware proxy
+delete
+. type:NSR device
+update enabled:No
+update read only:Yes
+. type:NSR Jukebox
+update enabled:No

@@ -4,4 +4,4 @@ delete
 update enabled:No
 update read only:Yes
 . type:NSR Jukebox
-update enabled:No
+update enabled:Service

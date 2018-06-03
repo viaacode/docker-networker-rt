@@ -19,6 +19,7 @@ RUN yum localinstall --nogpgcheck -y /lgtoclnt-9.2.1.2-1.x86_64.rpm \
 RUN yum clean all && rm -f /lgto*.rpm
 
 COPY authc_configure.resp /
+RUN sed -i -r -e "s/_secret_/pW+$(date +%N)$RANDOM$$._k/" /authc_configure.resp
 RUN /opt/nsr/authc-server/scripts/authc_configure.sh  -silent /authc_configure.resp
 RUN sed -i -r -e 's/(TCUSER=).*/\1root/' /nsr/authc/bin/authcrc
 

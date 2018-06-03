@@ -32,10 +32,10 @@ nsradmin -i /bootstrapdevice
 wait_for_networker_startup
 
 
-nsrdr -a -B $BootStrapId  -d $Device -v
+TERM=xterm nsrdr -a -B $BootStrapId  -d $Device -v
 
 # Unmount all volumes
-/usr/sbin/nsrmm -u -y
+nsrmm -u -y
 
 # Disable all workflows
 nsrpolicy policy list |\
@@ -49,17 +49,23 @@ nsrpolicy policy list |\
 # Disable devices and delete vproxies
 nsradmin -i /mask_devices.nsradmin
 
-# Re-enable and mount our Disaster Recovery Device
+# Re-enable and mount our Disaster Recovery Device (read only)
 nsradmin <<EOF
 . name:$Device
 update enabled:Yes
 y
 EOF
-/usr/sbin/nsrmm -m $Volume -f $Device -r
+nsrmm -m $Volume -f $Device -r
 
 # Recover the client indexes
-mminfo -q volume=$Volume -r client | sort -u | xargs  nsrck -L7 
-
+# Restrict recovery to indexes available on our disaster recovery volume
+# use the -t option of nsrck to prevent it from trying
+# to restore a more recent index that might be present on another volume 
+mminfo -q volume=$Volume -r client | sort -u |\
+    while read -r client; do
+        SaveTime=$(mminfo -v -ot -N "index:$client" -q level=full -r 'savetime(22)' $Volume | tail -1)
+        nsrck -L7 -t "$SaveTime" $client
+    done
 }
 
 ########

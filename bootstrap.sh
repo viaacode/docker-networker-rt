@@ -49,13 +49,20 @@ nsrpolicy policy list |\
 # Disable devices and delete vproxies
 nsradmin -i /mask_devices.nsradmin
 
+# restore of indexes sometimes hangs
+# sleeping in between operations seems to help
+sleep 10
+
 # Re-enable and mount our Disaster Recovery Device (read only)
 nsradmin <<EOF
 . name:$Device
 update enabled:Yes
 y
 EOF
+sleep 10
+
 nsrmm -m $Volume -f $Device -r
+sleep 10
 
 # Recover the client indexes
 # Restrict recovery to indexes available on our disaster recovery volume

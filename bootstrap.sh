@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
 
 function wait_for_storage_node {
-while ! pgrep -x nsrmmd >/dev/null; do
-   echo 'waiting for nsrmmd'
-   sleep 30
+echo 'Waiting for strorage node'
+tail -0f /nsr/logs/daemon.raw | while read -r line ; do
+  [ $(expr "$line" : '.*nsrsnmd process on storage node .*s changed its state .* SNMD_READY') -gt 0 ] && break
 done
+echo 'Strorage node is ready'
+}
+
+function wait_for_media_database {
+echo 'Waiting for media database'
+tail -0f /nsr/logs/daemon.raw | while read -r line ; do
+  [ $(expr "$line" : '.*Media database is open for business') -gt 0 ] && break
+done
+echo 'Media database is ready'
 }
 
 # Function bootstrap
@@ -27,15 +36,15 @@ Volume=${1#*,}
 
 Device=$(sed -r -n -e  's/^\s+name:\s*([^;]+);/\1/p' /bootstrapdevice )
 
-# Create a networker resource for the device containing the
-# backup filesets and bootstraps
+echo "$(date) Import device containing the backup filesets and bootstraps"
 nsradmin -i /bootstrapdevice
+
 wait_for_storage_node
 
-
+echo "$(date) Starting disaster recovery'"
 TERM=xterm nsrdr -a -B $BootStrapId  -d $Device -v
 
-# Disable all workflows
+echo "$(date) Disable all workflows"
 nsrpolicy policy list |\
     while read -r pol; do
         nsrpolicy workflow list -p "$pol" |\
@@ -46,10 +55,11 @@ nsrpolicy policy list |\
 
 # Recreate the lockbox and restart networker, in order to avoid the following
 # error:
-# nsrd RAP critical Error encountered while re-signing lockbox
-# '/nsr/lockbox/dg-mgm-bkp-01.dg.viaa.be/clb.lb': The Lockbox stable value
-# threshold was not met because the system fingerprint has changed. To reset 
-# the system fingerprint, open the Lockbox using the passphrase
+# Unable to query NSR database for list of configured devices:
+#   Unable to decrypt data: error:06065064:digital envelope routines:
+#   EVP_DecryptFinal_ex:bad decrypt
+#   The result is that the index recovery after the bootstrap are tried from a
+#   device that is noy available in the DR environment.
 LBScript=/LB.$(date '+%N')
 cat >$LBScript <<EOF
 option hidden
@@ -71,25 +81,32 @@ EOF
 nsradmin -i $LBScript
 rm -f $LBScript
 
+echo "$(date) Stopping networker"
 /etc/init.d/networker stop
 
-# Disable devices and delete vproxies
+echo "$(date) Disable devices, set them read-only and delete vproxies"
+# Most devices are not avaliable in the DR environment
+# and the DR instnace of networker must not have write access to
+# any of them.
 nsradmin -d /nsr/res/nsrdb -i /mask_devices.nsradmin
 
-# Re-enable our Disaster Recovery Device (read only)
+echo "$(date) Re-enable our Disaster Recovery Device"
+# It has been set read only by the command above
 nsradmin -d /nsr/res/nsrdb <<EOF
 . name:$Device
 update enabled:Yes
 y
 EOF
 
+echo
 /etc/init.d/networker start
 wait_for_storage_node
-
+sleep 30
 # Recover the client indexes
 # Restrict recovery to indexes available on our disaster recovery volume
 # use the -t option of nsrck to prevent it from trying
 # to restore a more recent index that might be present on another volume 
+# that is not available in the DR environment.
 mminfo -q volume=$Volume -r client | sort -u |\
     while read -r client; do
         SaveTime=$(mminfo -v -ot -N "index:$client" -q level=full -r 'savetime(22)' $Volume | tail -1)
@@ -113,7 +130,7 @@ BootStrapInfo=$1
 
 Volume=${BootStrapInfo#*,}
 
-echo "Bootstrap Info: $BootStrapInfo"
+echo "$(date) Bootstrap Info: $BootStrapInfo"
 
 # Render nsr logs to container stderr
 mkfifo /tmp/daemon.raw
@@ -122,24 +139,26 @@ nsr_render_log /tmp/daemon.raw >&2 &
 
 /etc/init.d/networker start
 
-# Wait for media database to get ready
-sleep 30
- 
 # only perform bootstrap recovery if our volume is not mounted
 # this allows to restart a stopped container without losing state
-nsrmm | grep mounted | grep -q $Volume || bootstrap $BootStrapInfo
+wait_for_media_database
+if nsrmm | grep mounted | grep -q $Volume; then
+  wait_for_storage_node
+else
+  bootstrap $BootStrapInfo
+fi
 
 # Find out to which pool our volume belongs
 # Recovery will be restricted to filesets in this pool
+# this avoids recovery attempts from devices that are disabled 
+# or not avaibale in the DR environment
 Pool=$(mmpool $Volume | grep ^$Volume | cut -f2 -d ' ')
-
-wait_for_storage_node
 
 # Listen for incoming recover requests 
 # use socat in stead of netcat casue the latter
 # does not behave consistently between linux distributions
 
-echo "$HOSTNAME is open for recovery"
+echo "$(date) $HOSTNAME is open for recovery"
 echo "Listening on $(expr match "$RecoverySocket" '\([^,]\+\)')"
 echo "Usage: echo <client> <path> <uid> | socat -,ignoreeof <socket>"
 

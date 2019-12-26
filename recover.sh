@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 # RecoveryArea must be set
-set -x
-
 [ -z "$RecoveryArea" ] && exit 1
 Pool="$1"
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -x
+
 # RecoveryArea must be set
 [ -z "$RecoveryArea" ] && exit 1
 # This command can be used to recover files in a disaster recovery environment.

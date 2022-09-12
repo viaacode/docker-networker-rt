@@ -121,6 +121,9 @@ mminfo -q volume=$Volume -r client | sort -u |\
 ########
 # This script requires bootstrap info
 # as a string with format: "ssid,volume"
+
+echo rm $(sed -r -e s'/unix-listen:([^,]+),.*/\1/' <<< $RecoverySocket)
+
 [ -z "$1" ] && exit 1
 
 # LockBoxPassPhrase must be set
@@ -133,7 +136,7 @@ Volume=${BootStrapInfo#*,}
 echo "$(date) Bootstrap Info: $BootStrapInfo"
 
 # Render nsr logs to container stderr
-mkfifo /tmp/daemon.raw
+[ -e /tmp/daemon.raw ] || mkfifo /tmp/daemon.raw
 tail -F /nsr/logs/daemon.raw >/tmp/daemon.raw &
 nsr_render_log /tmp/daemon.raw >&2 &
 
@@ -162,4 +165,4 @@ echo "$(date) $HOSTNAME is open for recovery"
 echo "Listening on $(expr match "$RecoverySocket" '\([^,]\+\)')"
 echo "Usage: echo <client> <path> <uid> | socat -,ignoreeof <socket>"
 
-socat "$RecoverySocket"  EXEC:"/recover.sh $Pool"
+exec socat "$RecoverySocket"  EXEC:"/recover.sh $Pool"

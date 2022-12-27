@@ -38,14 +38,14 @@ if [ "$Exclude" != 'null' ]; then
   RecoverOptions+=("--exclude-from=$ExcludeFile")
 fi
 
-RecoverOptions+=("--server=do-mgm-idpa-ava.do.viaa.be --path=/clients/$Host --id=$backupuser --ap=$backuppassword --target=$Destination --dereference --browse_filter_threshold_value=0")
+RecoverOptions+=("--server=do-mgm-idpa-ava.do.viaa.be --path=/clients/$Host --id=$AvamarUser --ap=$AvamarPassword --target=$Destination --dereference --browse_filter_threshold_value=0")
 
 function findbackup(){
   FileToFind=$1
   Basename=$(basename $FileToFind)
   echo "searching" $FileToFind
 
-  BackupIds=( $(avtar --backups --server=do-mgm-idpa-ava.do.viaa.be --id=$backupuser --ap=$backuppassword --account=/clients/do-qas-dcs-01.do.viaa.be $Before | tr -s ' ' | cut -d ' ' -f 4))
+  BackupIds=( $(avtar --backups --server=do-mgm-idpa-ava.do.viaa.be --id=$AvamarUser --ap=$AvamarPassword --account=/clients/$Host $Before | tr -s ' ' | cut -d ' ' -f 4))
 
   # Remove first 2 lines of output
   unset BackupIds[0]
@@ -58,7 +58,7 @@ function findbackup(){
   for id in ${BackupIds[@]} 
   do
       echo "Searching in backup $id"
-      BackupContent=( $(eval avtar --list --labelnum=$id --id=$backupuser --ap=$backuppassword --acnt=/clients/$Host --quiet) )
+      BackupContent=( $(eval avtar --list --labelnum=$id --id=$AvamarUser --ap=$AvamarPassword --acnt=/clients/$Host --quiet) )
       for content in ${BackupContent[@]}
       do 
           if [ $content = "$FileToFind" ]; then

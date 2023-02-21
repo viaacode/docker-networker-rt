@@ -44,7 +44,9 @@ if [ "$Exclude" != 'null' ]; then
   RecoverOptions+=("--exclude-from=$ExcludeFile")
 fi
 
-RecoverOptions+=("--server=do-mgm-idpa-ava.do.viaa.be --path=/clients/$Host --id=$AvamarUser --ap=$AvamarPassword --target=$Destination --dereference --browse_filter_threshold_value=0")
+RecoverOptions+=("--server=do-mgm-idpa-ava.do.viaa.be --path=/clients/$Host \
+    --id=$AvamarUser --ap=$AvamarPassword --target=$Destination \
+    --dereference --browse_filter_threshold_value=0")
 
 function findbackup(){
   FileToFind=$1
@@ -52,16 +54,24 @@ function findbackup(){
   echo "searching" $FileToFind
 
   BackupToRestore=-1
-  #Target=( $(avtar --backups --server=do-mgm-idpa-ava.do.viaa.be --id=$AvamarUser --ap=$AvamarPassword --account=/clients/$Host $Before | sed -r 's/[0-9-]+ +[[0-9:]+ +([0-9]+).*(Linux|Unix) +([^ ]+) +([^ ]+).*/\1 \3 \4/' | egrep "[ ,]${FileToFind%/}(,|$)" | head -1) )
 
-  Target=( $(avtar --backups --server=do-mgm-idpa-ava.do.viaa.be --id=$AvamarUser --ap=$AvamarPassword --account=/clients/$Host $Before | head -15 | sed -r 's/[0-9-]+ +[[0-9:]+ +([0-9]+).*(Linux|Unix) +([^ ]+) +([^ ]+).*/\1 \3 \4/' | while read id wd tgt; do expr "$tgt" : '/' >/dev/null && echo "$id $tgt" || echo "$id $wd/$tgt"; done | egrep "[ ,]${FileToFind%/}(,|$)" | head -1) )
+  Target=( $(avtar --backups --server=do-mgm-idpa-ava.do.viaa.be --id=$AvamarUser \
+      --ap=$AvamarPassword --account=/clients/$Host $Before | \
+      sed -r 's/[0-9-]+ +[[0-9:]+ +([0-9]+).*(Linux|Unix) +([^ ]+) +([^ ]+).*/\1 \3 \4/' | \
+      while read id wd tgt; do
+          expr "$tgt" : '/' >/dev/null && echo "$id $tgt" || echo "$id $wd/$tgt"
+      done | egrep "[ ,]${FileToFind%/}(,|$)" | head -1) )
   if [ -n "$Target" ]; then
-      WorkDir=$(avtar --backups --server=do-mgm-idpa-ava.do.viaa.be --id=$AvamarUser --ap=$AvamarPassword --account=/clients/$Host --labelnum=$Target | sed -rn "s/ *[0-9-]+ +[[0-9:]+ +$Target .*(Linux|Unix) +([^ ]+) +([^ ]+).*/\2/p")/
+      WorkDir=$(avtar --backups --server=do-mgm-idpa-ava.do.viaa.be --id=$AvamarUser \
+          --ap=$AvamarPassword --account=/clients/$Host --labelnum=$Target | \
+          sed -rn "s/ *[0-9-]+ +[[0-9:]+ +$Target .*(Linux|Unix) +([^ ]+) +([^ ]+).*/\2/p")/
       FileToRestore=${FileToFind#$WorkDir}
       BackupToRestore=$Target
   else
       FileToRestore="${FileToFind}"
-      BackupIds=( $(avtar --backups --server=do-mgm-idpa-ava.do.viaa.be --id=$AvamarUser --ap=$AvamarPassword --account=/clients/$Host $Before | tr -s ' ' | cut -d ' ' -f 4))
+      BackupIds=( $(avtar --backups --server=do-mgm-idpa-ava.do.viaa.be --id=$AvamarUser \
+          --ap=$AvamarPassword --account=/clients/$Host $Before | tr -s ' ' | \
+          cut -d ' ' -f 4))
 
       # Remove first 2 lines of output
       unset BackupIds[0]
@@ -71,7 +81,8 @@ function findbackup(){
       for id in ${BackupIds[@]} 
       do
           echo "Searching in backup $id"
-          BackupContent=( $(eval avtar --list --labelnum=$id --id=$AvamarUser --ap=$AvamarPassword --acnt=/clients/$Host --quiet) )
+          BackupContent=( $(eval avtar --list --labelnum=$id --id=$AvamarUser \
+              --ap=$AvamarPassword --acnt=/clients/$Host --quiet) )
           for content in ${BackupContent[@]}
           do 
               if [ $content = "$FileToFind" ]; then
@@ -105,6 +116,5 @@ RC=$?
 [ $RC -ne 0 ] && echo "Warning: recover ended with non-zero rc: $RC"
 [ -e "$Destination/$Basename" ] || exit 5    # recovery failed
 [ "$Uid" == "null" ] || chown -R  $Uid $Destination/$Basename
-
 
 exit 0

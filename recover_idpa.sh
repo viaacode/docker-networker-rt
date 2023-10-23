@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -x
 
 # RecoveryArea must be set
 [ -z "$RecoveryArea" ] && exit 1
@@ -28,13 +27,20 @@ Destination=$RecoveryArea/$Host
 [ $(stat -c %g $Destination) -eq 4 ] || chgrp $RecoveryAreaGid $Destination
 [ $(stat -c %a $Destination) -eq 0770 ] || chmod 0770 $Destination
 
-if [ -n "$Time" -a "$Time" != 'null' ]; then
-    echo "Got $Time"
-    #RecoverOptions+=("-t '$(date -d "$Time" +%m/%d/%Y\ %H:%M:%S)'")
-    #[ $? -eq 0 ] || exit 4
-    echo "Setting recovery time to: $Time"
-    Before+=("--before=$(date -d "$Time" '+%F %T') ")
+if [ -z "$Time" -a "$Time" == 'null' ]; then
+    BeforeEpoch=$(date -d "$Time=" +%s)
+else
+    BeforeEpoch=$(date +%s)
 fi
+
+AfterEpoch=$((BeforeEpoch - 36*3600))
+
+echo "Got $Time"
+#RecoverOptions+=("-t '$(date -d "$Time" +%m/%d/%Y\ %H:%M:%S)'")
+#[ $? -eq 0 ] || exit 4
+Before="--before=\"$(date -d @$BeforeEpoch '+%F %T')\""
+echo "Setting recovery time to: $Before"
+After="--after=\"$(date -d @$AfterEpoch '+%F %T')\""
 
 if [ "$Exclude" != 'null' ]; then
   ExcludeFile="/tmp/$$.$RANDOM"
@@ -56,7 +62,7 @@ function findbackup(){
   BackupToRestore=-1
 
   Target=( $(avtar --backups --server=do-mgm-idpa-ava.do.viaa.be --id=$AvamarUser \
-      --ap=$AvamarPassword --account=/clients/$Host $Before | \
+      --ap=$AvamarPassword --account=/clients/$Host "$Before" "$After" | \
       sed -r 's/[0-9-]+ +[[0-9:]+ +([0-9]+).*(Linux|Unix) +([^ ]+) +([^ ]+).*/\1 \3 \4/' | \
       while read id wd tgt; do
           expr "$tgt" : '/' >/dev/null && echo "$id $tgt" || echo "$id $wd/$tgt"
@@ -70,7 +76,7 @@ function findbackup(){
   else
       FileToRestore="${FileToFind}"
       BackupIds=( $(avtar --backups --server=do-mgm-idpa-ava.do.viaa.be --id=$AvamarUser \
-          --ap=$AvamarPassword --account=/clients/$Host $Before | tr -s ' ' | \
+          --ap=$AvamarPassword --account=/clients/$Host "$Before" "$After" | tr -s ' ' | \
           cut -d ' ' -f 4))
 
       # Remove first 2 lines of output
@@ -99,8 +105,10 @@ function findbackup(){
       if [[ "$FileToFind" == */  ]]; then
         echo "ENDS WITH /"
         RecoverOptions+=(" --target=$Destination/$Basename ")
+      else
+          FileToRestore=$(dirname $FileToRestore)
       fi
-      eval avtar -x ${RecoverOptions[@]} $FileToRestore --labelnum=$BackupToRestore
+      avtar -x ${RecoverOptions[@]} $FileToRestore --labelnum=$BackupToRestore
   else
       echo "Searched ${#BackupIds[@]} backups, but could not find $File. Aborting restore." 
       exit 5
@@ -115,6 +123,6 @@ RC=$?
 # for example, files that grew during backup
 [ $RC -ne 0 ] && echo "Warning: recover ended with non-zero rc: $RC"
 [ -e "$Destination/$Basename" ] || exit 5    # recovery failed
-[ "$Uid" == "null" ] || chown -R  $Uid $Destination/$Basename
+[ "$Uid" == "null" ] || chown -R  $Uid $Destination/*
 
 exit 0

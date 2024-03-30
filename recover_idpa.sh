@@ -128,7 +128,7 @@ function findbackup(){
 
 Basename=$(basename $File)
 # Recover file if it has not been prefetched
-[ -r "$Destination/$Basename" ] && [ "$File" != */  ] || findbackup "$File"
+[ -r "$Destination/$Basename" ] && [[ "$File" != */ ]] || findbackup "$File"
 RC=$?
 # treat non-zero rc as warning, because it may be harmless
 # for example, files that grew during backup
